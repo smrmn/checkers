@@ -8,7 +8,7 @@
 ## Файловая структура
 
 ```
-checkers.html          ← собранный файл (открывать в браузере, коммитить)
+index.html          ← собранный файл (открывать в браузере, коммитить)
 build.py               ← сборщик: python3 build.py
 src/
   template.html        ← HTML-скелет с маркерами /* INJECT:path */
@@ -27,7 +27,7 @@ src/
 ```
 
 Сборка: `python3 build.py` — инжектирует содержимое файлов в маркеры `/* INJECT:path */`
-в template.html и записывает результат в checkers.html.
+в template.html и записывает результат в index.html.
 
 ---
 

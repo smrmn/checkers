@@ -3,7 +3,7 @@ import re
 from pathlib import Path
 
 SRC = Path('src')
-OUT = Path('checkers.html')
+OUT = Path('index.html')
 
 template = (SRC / 'template.html').read_text(encoding='utf-8')
 
