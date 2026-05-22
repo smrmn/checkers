@@ -1,0 +1,13 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(python3 build.py)",
+      "mcp__Claude_Preview__preview_start",
+      "Bash(gh auth *)",
+      "Bash(git --version)",
+      "Bash(ssh -T git@github.com)",
+      "Bash(git config *)",
+      "Bash(ssh-keyscan -H github.com >> ~/.ssh/known_hosts 2>&1 && ssh -T git@github.com 2>&1)"
+    ]
+  }
+}

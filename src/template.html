@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Шашки с модификаторами</title>
+  <style>
+/* INJECT:css/style.css */
+  </style>
+</head>
+<body>
+  <h1>Шашки с модификаторами</h1>
+
+  <div id="board-wrapper">
+    <div id="board"></div>
+    <div id="fog-layer"></div>
+    <div id="end-overlay" class="hidden">
+      <div id="end-time"></div>
+      <div id="end-result"></div>
+      <div id="end-pieces"></div>
+      <div id="end-modifiers"></div>
+      <button class="btn btn-reset-overlay" onclick="resetMatch()">Reset</button>
+    </div>
+  </div>
+
+  <footer id="footer">
+    <div id="status-row">
+      <div id="turn-indicator"></div>
+      <div id="timer">00:00</div>
+    </div>
+
+    <div id="toggles-row">
+      <label class="toggle-switch">
+        <input type="checkbox" id="toggle-fragile"
+               onchange="onToggleChange('fragileTiles', this.checked)">
+        <span class="toggle-track"><span class="toggle-thumb"></span></span>
+        <span class="toggle-label">Хрупкие плитки</span>
+      </label>
+      <label class="toggle-switch">
+        <input type="checkbox" id="toggle-fog"
+               onchange="onToggleChange('fogOfWar', this.checked)">
+        <span class="toggle-track"><span class="toggle-thumb"></span></span>
+        <span class="toggle-label">Туман войны</span>
+      </label>
+    </div>
+
+    <button class="btn btn-start" id="start-btn" onclick="onStartResetClick()">Start Match</button>
+  </footer>
+
+  <script>
+/* INJECT:js/01_state.js */
+/* INJECT:js/02_board.js */
+/* INJECT:js/03_execution.js */
+/* INJECT:js/04_player.js */
+/* INJECT:js/05_bot.js */
+/* INJECT:js/06_timer.js */
+/* INJECT:js/07_fog.js */
+/* INJECT:js/08_render.js */
+/* INJECT:js/09_game.js */
+  </script>
+</body>
+</html>

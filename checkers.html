@@ -1,0 +1,1109 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Шашки с модификаторами</title>
+  <style>
+*, *::before, *::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  background: #16161e;
+  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+  color: #c0c0d0;
+  gap: 20px;
+}
+
+h1 {
+  font-size: 1.1rem;
+  letter-spacing: 0.25em;
+  text-transform: uppercase;
+  color: #5a5a80;
+  font-weight: 400;
+}
+
+/* ── Board ── */
+
+#board-wrapper {
+  position: relative;
+}
+
+#board {
+  display: grid;
+  grid-template-columns: repeat(8, 72px);
+  grid-template-rows: repeat(8, 72px);
+  border: 3px solid #2a2a3a;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.6);
+}
+
+.cell {
+  width: 72px;
+  height: 72px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+}
+
+.cell.light { background: #e8e8e8; }
+.cell.dark  { background: #1c1c1c; }
+
+/* selected source cell outline */
+.cell.selected-source::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border: 3px solid rgba(255, 255, 255, 0.55);
+  pointer-events: none;
+}
+
+/* ── Pieces ── */
+
+.piece {
+  width: 52px;
+  height: 52px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  position: relative;
+  z-index: 1;
+}
+
+.piece.player {
+  background: radial-gradient(circle at 38% 35%, #7aabff, #1a3db5);
+  box-shadow:
+    0 4px 8px rgba(0, 0, 0, 0.55),
+    inset 0 1px 4px rgba(255, 255, 255, 0.35);
+  border: 2px solid #122e8a;
+}
+
+.piece.bot {
+  background: radial-gradient(circle at 38% 35%, #ff7a7a, #c01010);
+  box-shadow:
+    0 4px 8px rgba(0, 0, 0, 0.55),
+    inset 0 1px 4px rgba(255, 255, 255, 0.35);
+  border: 2px solid #8a0a0a;
+}
+
+/* selected piece: white ring */
+.cell.selected-source .piece {
+  box-shadow:
+    0 0 0 3px #fff,
+    0 0 10px rgba(255, 255, 255, 0.45),
+    0 4px 8px rgba(0, 0, 0, 0.55),
+    inset 0 1px 4px rgba(255, 255, 255, 0.35);
+}
+
+/* mandatory-capture piece: red ring */
+.cell.must-capture .piece {
+  box-shadow:
+    0 0 0 3px #e03030,
+    0 0 10px rgba(220, 50, 50, 0.5),
+    0 4px 8px rgba(0, 0, 0, 0.55),
+    inset 0 1px 4px rgba(255, 255, 255, 0.35);
+}
+
+/* ── Fragile Tiles ── */
+
+.cell.dark.cracked { background: #211a0e; }
+
+.cell.dark.cracked::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background:
+    linear-gradient(140deg,
+      transparent 43%, rgba(255,190,60,.22) 43%, rgba(255,190,60,.22) 45%, transparent 45%,
+      transparent 54%, rgba(255,190,60,.15) 54%, rgba(255,190,60,.15) 56%, transparent 56%);
+  pointer-events: none;
+  z-index: 0;
+}
+
+.cell.dark.destroyed { background: #0b0b0b; }
+
+.cell.dark.destroyed::before {
+  content: '×';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  font-size: 30px;
+  line-height: 1;
+  color: rgba(255, 255, 255, 0.13);
+  pointer-events: none;
+  z-index: 0;
+}
+
+/* ── Fog of War ── */
+
+#fog-layer {
+  position: absolute;
+  inset: 0;
+  z-index: 4;
+  pointer-events: none;
+}
+
+/* ── End overlay ── */
+
+#end-overlay {
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.80);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  z-index: 10;
+}
+
+#end-overlay.hidden { display: none; }
+
+#end-time {
+  font-size: 1.05rem;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.18em;
+  color: #7878a0;
+}
+
+#end-result {
+  font-size: 1.4rem;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  font-weight: 300;
+}
+
+#end-result.player-win { color: #6090ff; }
+#end-result.bot-win    { color: #ff6060; }
+#end-result.draw       { color: #909090; }
+
+#end-pieces {
+  display: flex;
+  gap: 28px;
+  align-items: center;
+  font-size: 0.8rem;
+  letter-spacing: 0.14em;
+}
+
+#end-pieces .pieces-player { color: #5a88ee; }
+#end-pieces .pieces-bot    { color: #ee5555; }
+#end-pieces .pieces-sep    { color: #404058; font-size: 0.65rem; }
+
+#end-modifiers {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+
+.mod-chip {
+  font-size: 0.6rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: #5a5a80;
+  border: 1px solid #2e2e4a;
+  border-radius: 2px;
+  padding: 3px 8px;
+}
+
+.btn-reset-overlay {
+  background: #252540;
+  color: #8888b8;
+  border: 1px solid #3a3a5a;
+  padding: 8px 32px;
+  border-radius: 3px;
+  font-size: 0.72rem;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  cursor: pointer;
+  margin-top: 4px;
+}
+
+.btn-reset-overlay:hover { background: #2e2e52; color: #a0a0d0; }
+
+/* ── Cursors ── */
+
+.cell.clickable { cursor: pointer; }
+
+/* ── Footer ── */
+
+#footer {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+  width: 576px;
+}
+
+/* ── Status row: turn indicator + timer ── */
+
+#status-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  width: 100%;
+  padding: 0 2px;
+  min-height: 1.2em;
+}
+
+#turn-indicator {
+  font-size: 0.75rem;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+}
+
+#turn-indicator.player-turn { color: #4a7adf; }
+#turn-indicator.bot-turn    { color: #c03030; }
+#turn-indicator.draw        { color: #888; }
+
+#timer {
+  font-size: 0.78rem;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.12em;
+  color: #38385a;
+  min-width: 5ch;
+  text-align: right;
+  transition: color 0.3s;
+}
+
+#timer.active { color: #5a5a90; }
+
+/* ── Toggle row ── */
+
+#toggles-row {
+  display: flex;
+  gap: 48px;
+  align-items: center;
+}
+
+.toggle-switch {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  cursor: pointer;
+  user-select: none;
+}
+
+.toggle-switch input { display: none; }
+
+.toggle-track {
+  width: 38px;
+  height: 20px;
+  background: #2e2e4a;
+  border-radius: 10px;
+  position: relative;
+  flex-shrink: 0;
+  transition: background 0.2s;
+  border: 1px solid #5a5a80;
+}
+
+.toggle-switch input:checked + .toggle-track {
+  background: #2a449c;
+  border-color: #5a74dc;
+}
+
+.toggle-thumb {
+  position: absolute;
+  width: 14px;
+  height: 14px;
+  background: #8080b0;
+  border-radius: 50%;
+  top: 2px;
+  left: 2px;
+  transition: transform 0.18s, background 0.18s;
+}
+
+.toggle-switch input:checked + .toggle-track .toggle-thumb {
+  transform: translateX(18px);
+  background: #a0b4ff;
+}
+
+.toggle-label {
+  font-size: 0.7rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: #8888b8;
+  transition: color 0.2s;
+}
+
+.toggle-switch:hover .toggle-label { color: #a0a0d0; }
+
+/* Toggles locked during match */
+#footer.playing .toggle-switch {
+  opacity: 0.28;
+  pointer-events: none;
+}
+
+/* ── Button ── */
+
+.btn {
+  padding: 9px 36px;
+  border: none;
+  border-radius: 3px;
+  font-size: 0.78rem;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+
+.btn-start {
+  background: #2e4da0;
+  color: #d0d8ff;
+}
+
+.btn-start:hover { background: #3a60c8; }
+
+  </style>
+</head>
+<body>
+  <h1>Шашки с модификаторами</h1>
+
+  <div id="board-wrapper">
+    <div id="board"></div>
+    <div id="fog-layer"></div>
+    <div id="end-overlay" class="hidden">
+      <div id="end-time"></div>
+      <div id="end-result"></div>
+      <div id="end-pieces"></div>
+      <div id="end-modifiers"></div>
+      <button class="btn btn-reset-overlay" onclick="resetMatch()">Reset</button>
+    </div>
+  </div>
+
+  <footer id="footer">
+    <div id="status-row">
+      <div id="turn-indicator"></div>
+      <div id="timer">00:00</div>
+    </div>
+
+    <div id="toggles-row">
+      <label class="toggle-switch">
+        <input type="checkbox" id="toggle-fragile"
+               onchange="onToggleChange('fragileTiles', this.checked)">
+        <span class="toggle-track"><span class="toggle-thumb"></span></span>
+        <span class="toggle-label">Хрупкие плитки</span>
+      </label>
+      <label class="toggle-switch">
+        <input type="checkbox" id="toggle-fog"
+               onchange="onToggleChange('fogOfWar', this.checked)">
+        <span class="toggle-track"><span class="toggle-thumb"></span></span>
+        <span class="toggle-label">Туман войны</span>
+      </label>
+    </div>
+
+    <button class="btn btn-start" id="start-btn" onclick="onStartResetClick()">Start Match</button>
+  </footer>
+
+  <script>
+const gameState = {
+  board: [],
+  currentTurn: 'player',
+  selectedPiece: null,
+  availableMoves: [],
+  inMultiCapture: false,
+  multiCapturePiece: null,
+  gameStatus: 'idle',
+  winner: null,
+  timer: 0,
+  timerInterval: null,
+  stats: {
+    playerCaptured: 0,
+    botCaptured: 0,
+    startTime: null
+  },
+  toggles: {
+    fragileTiles: false,
+    fogOfWar: false
+  }
+};
+
+function initBoard() {
+  const board = [];
+  for (let row = 0; row < 8; row++) {
+    board[row] = [];
+    for (let col = 0; col < 8; col++) {
+      const isDark = (row + col) % 2 === 1;
+      let piece = null;
+      if (isDark) {
+        if (row <= 2) piece = { color: 'bot' };
+        else if (row >= 5) piece = { color: 'player' };
+      }
+      board[row][col] = { piece, tileState: 'normal', hasReceivedPiece: false };
+    }
+  }
+  return board;
+}
+
+function getMovesForPiece(row, col) {
+  const { piece } = gameState.board[row][col];
+  if (!piece) return [];
+
+  const dir = piece.color === 'player' ? -1 : 1;
+  const moves = [];
+
+  for (const dc of [-1, 1]) {
+    const nr = row + dir;
+    const nc = col + dc;
+    if (nr < 0 || nr > 7 || nc < 0 || nc > 7) continue;
+    const target = gameState.board[nr][nc];
+    if (target.tileState === 'destroyed') continue;
+    if (target.piece) continue;
+    moves.push({ row: nr, col: nc });
+  }
+
+  return moves;
+}
+
+function getCapturesForPiece(row, col) {
+  const { piece } = gameState.board[row][col];
+  if (!piece) return [];
+
+  const opponent = piece.color === 'player' ? 'bot' : 'player';
+  const captures = [];
+
+  for (const dr of [-1, 1]) {
+    for (const dc of [-1, 1]) {
+      const midRow = row + dr;
+      const midCol = col + dc;
+      const landRow = row + 2 * dr;
+      const landCol = col + 2 * dc;
+
+      if (landRow < 0 || landRow > 7 || landCol < 0 || landCol > 7) continue;
+
+      const mid  = gameState.board[midRow][midCol];
+      const land = gameState.board[landRow][landCol];
+
+      if (!mid.piece || mid.piece.color !== opponent) continue;
+      if (land.piece) continue;
+      if (land.tileState === 'destroyed') continue;
+
+      captures.push({
+        row: landRow,
+        col: landCol,
+        captured: { row: midRow, col: midCol }
+      });
+    }
+  }
+
+  return captures;
+}
+
+function colorHasCaptures(color) {
+  for (let r = 0; r < 8; r++)
+    for (let c = 0; c < 8; c++) {
+      const { piece } = gameState.board[r][c];
+      if (piece && piece.color === color && getCapturesForPiece(r, c).length > 0)
+        return true;
+    }
+  return false;
+}
+
+function colorCanMove(color) {
+  for (let r = 0; r < 8; r++)
+    for (let c = 0; c < 8; c++) {
+      const { piece } = gameState.board[r][c];
+      if (piece && piece.color === color) {
+        if (getCapturesForPiece(r, c).length > 0) return true;
+        if (getMovesForPiece(r, c).length > 0) return true;
+      }
+    }
+  return false;
+}
+
+function countPieces() {
+  let player = 0, bot = 0;
+  for (let r = 0; r < 8; r++)
+    for (let c = 0; c < 8; c++) {
+      const p = gameState.board[r][c].piece;
+      if (p?.color === 'player') player++;
+      if (p?.color === 'bot')    bot++;
+    }
+  return { player, bot };
+}
+
+function checkGameEnd() {
+  const counts = countPieces();
+
+  if (counts.bot === 0)    return { ended: true, winner: 'player' };
+  if (counts.player === 0) return { ended: true, winner: 'bot' };
+
+  if (!colorCanMove(gameState.currentTurn)) {
+    if (counts.player > counts.bot) return { ended: true, winner: 'player' };
+    if (counts.bot > counts.player) return { ended: true, winner: 'bot' };
+    return { ended: true, winner: 'draw' };
+  }
+
+  return { ended: false };
+}
+
+function onPieceDeparted(row, col) {
+  if (!gameState.toggles.fragileTiles) return;
+  if ((row + col) % 2 === 0) return;
+  const cell = gameState.board[row][col];
+  if (!cell.hasReceivedPiece) return; // starting cells don't crack on first departure
+  if (cell.tileState === 'normal')       cell.tileState = 'cracked';
+  else if (cell.tileState === 'cracked') cell.tileState = 'destroyed';
+}
+
+function executeMove(fromRow, fromCol, toRow, toCol) {
+  const piece = gameState.board[fromRow][fromCol].piece;
+  gameState.board[toRow][toCol].piece = piece;
+  gameState.board[toRow][toCol].hasReceivedPiece = true;
+  gameState.board[fromRow][fromCol].piece = null;
+  onPieceDeparted(fromRow, fromCol);
+  gameState.selectedPiece = null;
+  gameState.availableMoves = [];
+}
+
+function executeCapture(fromRow, fromCol, toRow, toCol, capRow, capCol) {
+  const piece = gameState.board[fromRow][fromCol].piece;
+  gameState.board[toRow][toCol].piece = piece;
+  gameState.board[toRow][toCol].hasReceivedPiece = true;
+  gameState.board[fromRow][fromCol].piece = null;
+  gameState.board[capRow][capCol].piece = null;
+  onPieceDeparted(fromRow, fromCol);
+
+  if (piece.color === 'player') gameState.stats.playerCaptured++;
+  else                          gameState.stats.botCaptured++;
+
+  gameState.selectedPiece = null;
+  gameState.availableMoves = [];
+}
+
+function selectPiece(row, col) {
+  gameState.selectedPiece = { row, col };
+
+  if (colorHasCaptures('player')) {
+    gameState.availableMoves = getCapturesForPiece(row, col);
+  } else {
+    gameState.availableMoves = getMovesForPiece(row, col);
+  }
+
+  renderBoard();
+}
+
+function afterPlayerCapture(toRow, toCol) {
+  const further = getCapturesForPiece(toRow, toCol);
+
+  if (further.length > 0) {
+    gameState.inMultiCapture = true;
+    gameState.multiCapturePiece = { row: toRow, col: toCol };
+    gameState.selectedPiece = { row: toRow, col: toCol };
+    gameState.availableMoves = further;
+    renderBoard();
+  } else {
+    gameState.inMultiCapture = false;
+    gameState.multiCapturePiece = null;
+    endPlayerTurn();
+  }
+}
+
+function endPlayerTurn() {
+  if (!gameState.timerInterval) startTimer();
+
+  gameState.selectedPiece = null;
+  gameState.availableMoves = [];
+  gameState.currentTurn = 'bot';
+
+  const end = checkGameEnd();
+  if (end.ended) {
+    handleGameEnd(end.winner);
+    renderBoard();
+    return;
+  }
+
+  renderBoard();
+  setTimeout(doBotTurn, 600);
+}
+
+function handleCellClick(e) {
+  if (gameState.gameStatus !== 'playing') return;
+  if (gameState.currentTurn !== 'player') return;
+
+  const cell = e.target.closest('.cell');
+  if (!cell) return;
+
+  const row = parseInt(cell.dataset.row);
+  const col = parseInt(cell.dataset.col);
+  const { piece } = gameState.board[row][col];
+
+  if (gameState.inMultiCapture) {
+    const hit = gameState.availableMoves.find(m => m.row === row && m.col === col);
+    if (hit) {
+      executeCapture(
+        gameState.multiCapturePiece.row, gameState.multiCapturePiece.col,
+        row, col,
+        hit.captured.row, hit.captured.col
+      );
+      afterPlayerCapture(row, col);
+    }
+    return;
+  }
+
+  if (piece && piece.color === 'player') {
+    selectPiece(row, col);
+    return;
+  }
+
+  if (gameState.selectedPiece) {
+    const hit = gameState.availableMoves.find(m => m.row === row && m.col === col);
+    if (!hit) return;
+
+    if (hit.captured) {
+      executeCapture(
+        gameState.selectedPiece.row, gameState.selectedPiece.col,
+        row, col,
+        hit.captured.row, hit.captured.col
+      );
+      afterPlayerCapture(row, col);
+    } else {
+      executeMove(gameState.selectedPiece.row, gameState.selectedPiece.col, row, col);
+      endPlayerTurn();
+    }
+  }
+}
+
+function getBoardColors() {
+  return gameState.board.map(row =>
+    row.map(cell => cell.piece?.color ?? null)
+  );
+}
+
+function calcMaxChain(row, col, sim) {
+  const color = sim[row][col];
+  if (!color) return 0;
+  const opponent = color === 'bot' ? 'player' : 'bot';
+  let best = 0;
+
+  for (const dr of [-1, 1]) {
+    for (const dc of [-1, 1]) {
+      const mr = row + dr, mc = col + dc;
+      const lr = row + 2 * dr, lc = col + 2 * dc;
+      if (lr < 0 || lr > 7 || lc < 0 || lc > 7) continue;
+      if (sim[mr][mc] !== opponent) continue;
+      if (sim[lr][lc] !== null) continue;
+
+      const next = sim.map(r => [...r]);
+      next[lr][lc] = next[row][col];
+      next[row][col] = null;
+      next[mr][mc] = null;
+
+      const chain = 1 + calcMaxChain(lr, lc, next);
+      if (chain > best) best = chain;
+    }
+  }
+  return best;
+}
+
+function isCellDangerous(row, col, color) {
+  const attacker = color === 'bot' ? 'player' : 'bot';
+  for (const dr of [-1, 1]) {
+    for (const dc of [-1, 1]) {
+      const ar = row + dr, ac = col + dc;
+      const lr = row - dr, lc = col - dc;
+      if (ar < 0 || ar > 7 || ac < 0 || ac > 7) continue;
+      if (lr < 0 || lr > 7 || lc < 0 || lc > 7) continue;
+      const aCell = gameState.board[ar][ac];
+      if (!aCell.piece || aCell.piece.color !== attacker) continue;
+      const lCell = gameState.board[lr][lc];
+      if (lCell.piece) continue;
+      if (lCell.tileState === 'destroyed') continue;
+      return true;
+    }
+  }
+  return false;
+}
+
+function pickBestCapture(forcedPiece) {
+  const sim = getBoardColors();
+  const candidates = [];
+
+  const sources = forcedPiece
+    ? [forcedPiece]
+    : (() => {
+        const list = [];
+        for (let r = 0; r < 8; r++)
+          for (let c = 0; c < 8; c++) {
+            const { piece } = gameState.board[r][c];
+            if (piece && piece.color === 'bot') list.push({ row: r, col: c });
+          }
+        return list;
+      })();
+
+  for (const src of sources) {
+    for (const cap of getCapturesForPiece(src.row, src.col)) {
+      const next = sim.map(r => [...r]);
+      next[cap.row][cap.col] = next[src.row][src.col];
+      next[src.row][src.col] = null;
+      next[cap.captured.row][cap.captured.col] = null;
+
+      const chainLen = 1 + calcMaxChain(cap.row, cap.col, next);
+      candidates.push({ from: src, cap, chainLen });
+    }
+  }
+
+  if (!candidates.length) return null;
+
+  const maxLen = Math.max(...candidates.map(x => x.chainLen));
+  const best = candidates.filter(x => x.chainLen === maxLen);
+  return best[Math.floor(Math.random() * best.length)];
+}
+
+function pickBestMove(moves) {
+  const safe = moves.filter(m => !isCellDangerous(m.to.row, m.to.col, 'bot'));
+  let pool = safe.length > 0 ? safe : moves;
+
+  const nonCracked = pool.filter(
+    m => gameState.board[m.to.row][m.to.col].tileState !== 'cracked'
+  );
+  pool = nonCracked.length > 0 ? nonCracked : pool;
+
+  return pool[Math.floor(Math.random() * pool.length)];
+}
+
+function doBotTurn() {
+  doBotStep(null);
+}
+
+function doBotStep(forcedPiece) {
+  const hasCaptures = forcedPiece
+    ? getCapturesForPiece(forcedPiece.row, forcedPiece.col).length > 0
+    : colorHasCaptures('bot');
+
+  if (hasCaptures) {
+    const chosen = pickBestCapture(forcedPiece);
+    if (chosen) {
+      const { from, cap } = chosen;
+      executeCapture(from.row, from.col, cap.row, cap.col, cap.captured.row, cap.captured.col);
+
+      if (getCapturesForPiece(cap.row, cap.col).length > 0) {
+        renderBoard();
+        setTimeout(() => doBotStep({ row: cap.row, col: cap.col }), 600);
+        return;
+      }
+    }
+  } else if (!forcedPiece) {
+    const moves = [];
+    for (let r = 0; r < 8; r++)
+      for (let c = 0; c < 8; c++) {
+        const { piece } = gameState.board[r][c];
+        if (piece && piece.color === 'bot')
+          getMovesForPiece(r, c).forEach(m =>
+            moves.push({ from: { row: r, col: c }, to: m })
+          );
+      }
+    if (moves.length > 0) {
+      const chosen = pickBestMove(moves);
+      executeMove(chosen.from.row, chosen.from.col, chosen.to.row, chosen.to.col);
+    }
+  }
+
+  gameState.currentTurn = 'player';
+
+  const end = checkGameEnd();
+  if (end.ended) {
+    handleGameEnd(end.winner);
+    renderBoard();
+    return;
+  }
+
+  renderBoard();
+}
+
+function startTimer() {
+  if (gameState.timerInterval) return;
+  gameState.stats.startTime = Date.now() - gameState.timer * 1000;
+  gameState.timerInterval = setInterval(() => {
+    gameState.timer = Math.floor((Date.now() - gameState.stats.startTime) / 1000);
+    updateTimerDisplay();
+  }, 500);
+  document.getElementById('timer').classList.add('active');
+}
+
+function stopTimer() {
+  if (gameState.timerInterval) {
+    clearInterval(gameState.timerInterval);
+    gameState.timerInterval = null;
+  }
+  document.getElementById('timer').classList.remove('active');
+}
+
+function formatTime(secs) {
+  const m = Math.floor(secs / 60).toString().padStart(2, '0');
+  const s = (secs % 60).toString().padStart(2, '0');
+  return `${m}:${s}`;
+}
+
+function updateTimerDisplay() {
+  document.getElementById('timer').textContent = formatTime(gameState.timer);
+}
+
+function onToggleChange(key, value) {
+  gameState.toggles[key] = value;
+}
+
+function updateFooterState() {
+  const footer = document.getElementById('footer');
+  if (gameState.gameStatus === 'playing') {
+    footer.classList.add('playing');
+  } else {
+    footer.classList.remove('playing');
+  }
+}
+
+function isFogActive() {
+  return gameState.toggles.fogOfWar &&
+         gameState.gameStatus === 'playing' &&
+         gameState.timerInterval !== null;
+}
+
+function computeVisibility() {
+  const visible = new Set();
+  for (let r = 0; r < 8; r++)
+    for (let c = 0; c < 8; c++) {
+      const { piece } = gameState.board[r][c];
+      if (piece && piece.color === 'player') {
+        for (let dr = -2; dr <= 2; dr++)
+          for (let dc = -2; dc <= 2; dc++) {
+            const nr = r + dr, nc = c + dc;
+            if (nr >= 0 && nr < 8 && nc >= 0 && nc < 8)
+              visible.add(nr * 8 + nc);
+          }
+      }
+    }
+  return visible;
+}
+
+function renderFogLayer() {
+  const fogLayer = document.getElementById('fog-layer');
+  const CELL = 72, BOARD = 576;
+  const holeRects = [];
+
+  for (let r = 0; r < 8; r++) {
+    for (let c = 0; c < 8; c++) {
+      const { piece } = gameState.board[r][c];
+      if (piece && piece.color === 'player') {
+        const x  = Math.max(0, (c - 2) * CELL);
+        const y  = Math.max(0, (r - 2) * CELL);
+        const x2 = Math.min(BOARD, (c + 3) * CELL);
+        const y2 = Math.min(BOARD, (r + 3) * CELL);
+        holeRects.push(
+          `<rect x="${x}" y="${y}" width="${x2 - x}" height="${y2 - y}" rx="48" fill="black"/>`
+        );
+      }
+    }
+  }
+
+  fogLayer.innerHTML =
+    `<svg width="${BOARD}" height="${BOARD}" xmlns="http://www.w3.org/2000/svg" style="pointer-events:none">` +
+    `<defs><mask id="fog-mask">` +
+    `<rect width="${BOARD}" height="${BOARD}" fill="white"/>` +
+    holeRects.join('') +
+    `</mask></defs>` +
+    `<rect width="${BOARD}" height="${BOARD}" fill="rgba(90,90,100,0.92)" mask="url(#fog-mask)"/>` +
+    `</svg>`;
+}
+
+function clearFogLayer() {
+  document.getElementById('fog-layer').innerHTML = '';
+}
+
+function renderBoard() {
+  const boardEl = document.getElementById('board');
+  boardEl.innerHTML = '';
+
+  const sel = gameState.selectedPiece;
+  const isPlayerTurn = gameState.currentTurn === 'player';
+  const mustCaptureActive = isPlayerTurn &&
+                            gameState.gameStatus === 'playing' &&
+                            colorHasCaptures('player');
+
+  const fogActive  = isFogActive();
+  const visibleSet = fogActive ? computeVisibility() : null;
+
+  for (let row = 0; row < 8; row++) {
+    for (let col = 0; col < 8; col++) {
+      const cell = document.createElement('div');
+      cell.className = 'cell';
+      cell.dataset.row = row;
+      cell.dataset.col = col;
+
+      const isDark = (row + col) % 2 === 1;
+      cell.classList.add(isDark ? 'dark' : 'light');
+
+      const { piece, tileState } = gameState.board[row][col];
+      if (isDark && tileState !== 'normal') cell.classList.add(tileState);
+
+      const fogged = fogActive && !visibleSet.has(row * 8 + col);
+
+      const isSelected = sel && sel.row === row && sel.col === col;
+      if (isSelected) cell.classList.add('selected-source');
+
+      if (piece && (!fogged || piece.color === 'player')) {
+        const pieceEl = document.createElement('div');
+        pieceEl.className = `piece ${piece.color}`;
+        cell.appendChild(pieceEl);
+
+        if (piece.color === 'player' && isPlayerTurn && gameState.gameStatus === 'playing') {
+          cell.classList.add('clickable');
+
+          if (!isSelected && !gameState.inMultiCapture && mustCaptureActive &&
+              getCapturesForPiece(row, col).length > 0) {
+            cell.classList.add('must-capture');
+          }
+        }
+      }
+
+      boardEl.appendChild(cell);
+    }
+  }
+
+  if (fogActive) {
+    renderFogLayer();
+  } else {
+    clearFogLayer();
+  }
+
+  updateTurnIndicator();
+}
+
+function updateTurnIndicator() {
+  const el = document.getElementById('turn-indicator');
+
+  if (gameState.gameStatus === 'idle') {
+    el.textContent = '';
+    el.className = '';
+    return;
+  }
+
+  if (gameState.gameStatus === 'finished') {
+    if (gameState.winner === 'player') {
+      el.textContent = 'Победа игрока!';
+      el.className = 'player-turn';
+    } else if (gameState.winner === 'bot') {
+      el.textContent = 'Победа бота!';
+      el.className = 'bot-turn';
+    } else {
+      el.textContent = 'Ничья!';
+      el.className = 'draw';
+    }
+    return;
+  }
+
+  if (gameState.currentTurn === 'player') {
+    el.textContent = gameState.inMultiCapture ? 'Продолжайте бить!' : 'Ваш ход';
+    el.className = 'player-turn';
+  } else {
+    el.textContent = 'Ход бота…';
+    el.className = 'bot-turn';
+  }
+}
+
+function showEndOverlay(winner) {
+  document.getElementById('end-time').textContent = formatTime(gameState.timer);
+
+  const resultEl = document.getElementById('end-result');
+  if (winner === 'player') {
+    resultEl.textContent = 'Победа игрока';
+    resultEl.className = 'player-win';
+  } else if (winner === 'bot') {
+    resultEl.textContent = 'Победа бота';
+    resultEl.className = 'bot-win';
+  } else {
+    resultEl.textContent = 'Ничья';
+    resultEl.className = 'draw';
+  }
+
+  const counts = countPieces();
+  document.getElementById('end-pieces').innerHTML =
+    `<span class="pieces-player">Синих: ${counts.player}</span>` +
+    `<span class="pieces-sep">·</span>` +
+    `<span class="pieces-bot">Красных: ${counts.bot}</span>`;
+
+  const mods = [];
+  if (gameState.toggles.fragileTiles) mods.push('Хрупкие плитки');
+  if (gameState.toggles.fogOfWar)     mods.push('Туман войны');
+  const modsEl = document.getElementById('end-modifiers');
+  modsEl.innerHTML = mods.map(m => `<span class="mod-chip">${m}</span>`).join('');
+  modsEl.style.display = mods.length ? 'flex' : 'none';
+
+  document.getElementById('end-overlay').classList.remove('hidden');
+}
+
+function handleGameEnd(winner) {
+  gameState.gameStatus = 'finished';
+  gameState.winner = winner;
+  stopTimer();
+  updateFooterState();
+  showEndOverlay(winner);
+}
+
+function startMatch() {
+  stopTimer();
+  // Always capture toggle state from DOM to avoid any desync
+  gameState.toggles.fragileTiles = document.getElementById('toggle-fragile').checked;
+  gameState.toggles.fogOfWar     = document.getElementById('toggle-fog').checked;
+  gameState.board = initBoard();
+  gameState.currentTurn = 'player';
+  gameState.selectedPiece = null;
+  gameState.availableMoves = [];
+  gameState.inMultiCapture = false;
+  gameState.multiCapturePiece = null;
+  gameState.gameStatus = 'playing';
+  gameState.winner = null;
+  gameState.timer = 0;
+  gameState.stats = { playerCaptured: 0, botCaptured: 0, startTime: null };
+
+  updateTimerDisplay();
+  updateFooterState();
+  document.getElementById('start-btn').textContent = 'Reset';
+  document.getElementById('end-overlay').classList.add('hidden');
+  renderBoard();
+}
+
+function resetMatch() {
+  stopTimer();
+  gameState.board = initBoard();
+  gameState.currentTurn = 'player';
+  gameState.selectedPiece = null;
+  gameState.availableMoves = [];
+  gameState.inMultiCapture = false;
+  gameState.multiCapturePiece = null;
+  gameState.gameStatus = 'idle';
+  gameState.winner = null;
+  gameState.timer = 0;
+  gameState.stats = { playerCaptured: 0, botCaptured: 0, startTime: null };
+
+  updateTimerDisplay();
+  updateFooterState();
+  document.getElementById('start-btn').textContent = 'Start Match';
+  document.getElementById('end-overlay').classList.add('hidden');
+  renderBoard();
+}
+
+function onStartResetClick() {
+  if (gameState.gameStatus === 'playing') {
+    resetMatch();
+  } else {
+    startMatch();
+  }
+}
+
+document.getElementById('board').addEventListener('click', handleCellClick);
+
+(function init() {
+  gameState.board = initBoard();
+  renderBoard();
+})();
+
+  </script>
+</body>
+</html>
